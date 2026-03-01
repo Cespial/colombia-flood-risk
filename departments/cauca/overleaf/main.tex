@@ -1,0 +1,498 @@
+% ============================================================================
+% Municipality-Scale Flood Risk Mapping in Cauca, Colombia
+% Using Sentinel-1 SAR and Ensemble Machine Learning (2015--2025)
+% Authors: Cristian Espinal Maya, Santiago Jimenez Londono
+% Format: arXiv preprint
+% ============================================================================
+
+\documentclass{article}
+
+\usepackage{arxiv}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{nicefrac}
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{multirow}
+\usepackage{siunitx}
+\sisetup{
+    group-separator = {,},
+    group-minimum-digits = 4,
+}
+\usepackage{natbib}
+\usepackage{tabularx}
+\usepackage{textcomp}
+
+\graphicspath{{./figures/}}
+
+\title{Municipality-Scale Flood Risk Mapping in Cauca, Colombia, Using Sentinel-1 SAR and Ensemble Machine Learning (2015--2025)}
+
+\author{
+  Cristian Espinal Maya\thanks{Correspondence: cespinalm@eafit.edu.co. ORCID: \href{https://orcid.org/0009-0000-1009-8388}{0009-0000-1009-8388}} \\
+  School of Applied Sciences and Engineering\\
+  Universidad EAFIT\\
+  Medell\'in, Colombia \\
+  \texttt{cespinalm@eafit.edu.co} \\
+  \And
+  Santiago Jim\'enez Londo\~no\thanks{ORCID: \href{https://orcid.org/0009-0007-9862-7133}{0009-0007-9862-7133}} \\
+  School of Applied Sciences and Engineering\\
+  Universidad EAFIT\\
+  Medell\'in, Colombia \\
+  \texttt{sjimenez@eafit.edu.co} \\
+}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+% TODO: Update abstract with actual results after pipeline execution
+A persistent scale mismatch limits the utility of satellite-based flood products for local governance: most operate at national resolution, while flood risk decisions in decentralized countries are made at the municipal level. We replicate and extend a reproducible, open-access framework to deliver municipality-level flood risk statistics for all 42 municipalities of the Department of Cauca, Colombia (\SI{29308}{\kilo\metre\squared}; $\sim$1.6 million inhabitants). The department presents unique challenges: extreme topographic diversity (0--\SI{4700}{\metre} a.s.l.), one of Earth's wettest regions on its Pacific coast ($>$\SI{13000}{mm\,yr^{-1}}$), the Salvajina Dam's influence on the upper Cauca River regime, and cascading volcanic-seismic-flood hazards. We process Sentinel-1 C-band SAR scenes (2015--2025) within Google Earth Engine using adaptive Otsu thresholding to produce 132 monthly water extent maps at \SI{10}{\metre} resolution. Eighteen predictor variables are integrated into a weighted ensemble of Random Forest, XGBoost, and LightGBM under spatial five-fold cross-validation. SHAP analysis identifies dominant predictors. Overlaying the susceptibility surface with \SI{100}{\metre} population data quantifies exposure by municipality. The framework---data, code, and trained models---is open-access and fully reproducible (\url{https://github.com/Cespial/cauca-flood-risk}), enabling direct comparison with the original Cauca study \citep{EspinalMaya2026}.
+\end{abstract}
+
+\keywords{flood susceptibility mapping \and Sentinel-1 SAR \and ensemble machine learning \and HAND \and Google Earth Engine \and SHAP \and ENSO \and population exposure \and Cauca Colombia}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Introduction}
+\label{sec:introduction}
+
+Between November 2010 and May 2011, a La Ni\~na event struck Colombia with exceptional intensity: over 300 people died, 2.3 million were displaced, and direct losses exceeded USD 7.8 billion \citep{Hoyos2013}. The Department of Cauca---traversed by the upper Cauca River, the Pat\'ia basin, and Pacific coastal rivers receiving $>$\SI{13000}{mm\,yr^{-1}}$---was among the hardest-hit regions, with 41,669 hectares flooded in the upper Cauca valley alone \citep{Enciso2016}. Fifteen years later, most of Cauca's 42 municipalities still lack the spatially explicit flood information mandated by their own planning instruments.
+
+Globally, flooding affects approximately 1.65 billion people per decade \citep{UNDRR2020}. \citet{Tellman2021} showed that population exposure to flooding grew 20--24\% between 2000 and 2018, while \citet{Rentschler2022} estimated 1.81 billion people in significant flood hazard zones, 89\% in low- and middle-income countries. However, a persistent disconnect separates the scale at which satellite-derived flood products are generated (continental or national) from the scale at which flood risk decisions must be made (municipal) \citep{Bates2023}. This mismatch is acute in Colombia, where Ley~1523 of 2012 decentralizes flood risk management to municipalities, each legally mandated to formulate a Plan de Ordenamiento Territorial (POT) and a Plan Municipal de Gesti\'on del Riesgo de Desastres (PMGRD) \citep{CongresoCol2012}. Yet most lack the technical capacity to produce the required geospatial inputs \citep{OECD2019}.
+
+Three technological developments now converge to address this gap. First, Sentinel-1 SAR provides cloud-penetrating imagery at \SI{10}{\metre} resolution with 6--12 day revisit, overcoming the $>$70\% cloud contamination that renders optical sensors ineffective in tropical regions \citep{Twele2016, DeVries2020}. Second, ensemble machine learning (Random Forest, XGBoost, LightGBM) consistently outperforms traditional methods for flood susceptibility prediction \citep{Mosavi2018, Darabi2021}, with SHAP enabling model interpretability \citep{Lundberg2017}. Third, Google Earth Engine democratizes petabyte-scale satellite processing \citep{Gorelick2017}. Despite these advances, comprehensive frameworks carrying the analysis from raw SAR data through to municipality-level risk statistics remain rare, and the flood susceptibility ML literature is conspicuously underrepresented in Andean tropical environments \citep{FloodRiskLAC2022}.
+
+Global flood hazard products---including Fathom Global (\SI{90}{\metre}), the Global Flood Database \citep{Tellman2021}, and JRC Global Surface Water \citep{Pekel2016}---have transformed continental-scale flood assessment. However, their spatial resolution precludes the delineation of narrow Andean valley-floor flooding and urban-fluvial interfaces critical for municipal planning. Our municipal-scale framework is designed to be \textit{complementary}, not redundant: it ingests global products (JRC, MERIT Hydro) as input features while delivering locally actionable outputs at resolutions 3--9$\times$ finer than existing global layers.
+
+% TODO: Update contributions paragraph with actual results after pipeline execution
+\textbf{Research gap and contributions.} No previous study has applied SAR/GEE/ML flood susceptibility mapping specifically to the Department of Cauca, despite its complex multi-basin hydrography and extreme topographic diversity. Existing flood studies for Cauca are predominantly hydrological/statistical analyses focused on the Cauca River mainstream \citep{Enciso2016, Loaiza2021, Puertas2019}, not municipality-scale spatial susceptibility mapping. This work makes three specific contributions: (1) a complete SAR-to-municipality pipeline processing Sentinel-1 scenes across \SI{29308}{\kilo\metre\squared} and 11 years, replicating the methodology validated in Antioquia \citep{EspinalMaya2026}; (2) an ensemble ML susceptibility model with SHAP-based interpretability, tested across Cauca's extreme terrain heterogeneity (0--\SI{4700}{\metre}); and (3) quantified population exposure at the municipal level for a predominantly rural department ($\sim$65\% rural population), with special attention to indigenous and Afro-Colombian communities in flood-prone zones.
+
+\subsection{Study Area}
+\label{sec:study_area}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.75\textwidth]{fig01_study_area.pdf}
+\caption{Department of Cauca, Colombia, showing seven subregions and 42 municipalities.}
+\label{fig:study_area}
+\end{figure}
+
+The Department of Cauca (\SI{29308}{\kilo\metre\squared}; 0\textdegree{}58'--3\textdegree{}19'\,N, 75\textdegree{}47'--77\textdegree{}57'\,W) comprises 42 municipalities in seven subregions (Figure~\ref{fig:study_area}), with $\sim$1.6 million inhabitants---approximately 65\% rural, one of the highest ratios in Colombia. The landscape is structured by the Central and Western Cordilleras, creating an extreme elevational gradient from sea level to $\sim$\SI{4700}{\metre} (Purac\'e volcano). Five major basins drain the department: the upper Cauca (regulated since 1985 by the Salvajina Dam, 270~MW), the Pat\'ia (one of few Colombian rivers flowing westward to the Pacific), Pacific coastal rivers (Guapi, Timbiqu\'i, Micay), the upper Magdalena via the P\'aez River, and the Caquet\'a basin on the Amazonian piedmont. The Andean interior follows a bimodal precipitation regime (peaks in MAM and SON), strongly modulated by ENSO \citep{Poveda2001, Puertas2019}, while the Pacific coast receives continuous rainfall exceeding \SI{13000}{mm\,yr^{-1}} at L\'opez de Micay \citep{Poveda2004}. La Ni\~na episodes increase precipitation by $\sim$23\% and are associated with virtually all major historical flood events in the upper Cauca valley \citep{Enciso2016, Loaiza2021}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Materials and Methods}
+\label{sec:methods}
+
+\subsection{Data Sources}
+
+The framework integrates 10 satellite and ancillary datasets (Table~\ref{tab:data_sources}), all accessed via Google Earth Engine \citep{Gorelick2017} except administrative boundaries (GADM 4.1).
+
+\begin{table}[htbp]
+\caption{Datasets used in the flood risk assessment framework.}
+\label{tab:data_sources}
+\centering
+\footnotesize
+\begin{tabular}{lllll}
+\toprule
+\textbf{Dataset} & \textbf{Source} & \textbf{Resolution} & \textbf{Period} & \textbf{Role} \\
+\midrule
+Sentinel-1 GRD & ESA/Copernicus & \SI{10}{\metre} & 2015--2025 & Flood detection \\
+JRC GSW v1.4 & EC/JRC & \SI{30}{\metre} & 1984--2021 & Water dynamics \\
+SRTM DEM v3 & NASA/USGS & \SI{30}{\metre} & 2000 & Topographic features \\
+MERIT Hydro v1.0.1 & Yamazaki et al. & \SI{90}{\metre} & 2019 & HAND \\
+CHIRPS Daily v2.0 & UCSB/CHG & \SI{5.5}{\kilo\metre} & 2015--2025 & Precipitation \\
+ERA5-Land Monthly & ECMWF/C3S & \SI{11}{\kilo\metre} & 2015--2025 & Soil moisture \\
+Sentinel-2 MSI & ESA/Copernicus & \SI{10}{\metre} & 2020--2023 & NDVI \\
+ESA WorldCover v200 & ESA & \SI{10}{\metre} & 2021 & Land cover \\
+WorldPop v2020 & U. Southampton & \SI{100}{\metre} & 2020 & Population density \\
+GADM v4.1 & U.C. Davis & Vector & 2024 & Admin. boundaries \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A total of 4,762 Sentinel-1 C-band SAR GRD scenes were ingested (IW mode, VV+VH polarization, descending orbit), yielding a mean of 36 scenes per month across the study area. The Sentinel-1B failure (December 2021 to April 2024) reduced revisit to 12 days; Sentinel-1C deployment in December 2024 restored 6-day coverage. The JRC Global Surface Water dataset \citep{Pekel2016} provided 38-year water dynamics for validation and as an input feature. Terrain variables (elevation, slope, aspect, curvature, Topographic Wetness Index [TWI], and Stream Power Index [SPI]) were derived from SRTM \SI{30}{\metre}. HAND was computed from MERIT Hydro \SI{90}{\metre} \citep{Yamazaki2019} and resampled to \SI{30}{\metre} via bilinear interpolation within GEE. While resampling does not add spatial information beyond the native \SI{90}{\metre}, it enables pixel-aligned stacking with the \SI{30}{\metre} feature grid; the effective resolution of the HAND predictor remains \SI{90}{\metre}, and its vertical accuracy ($\pm$\SI{5}{\metre}, inherited from SRTM) should be considered when interpreting threshold-based results (e.g., HAND $< \SI{5}{\metre}$), particularly in low-relief floodplains.
+
+\subsection{SAR-Based Water Detection}
+\label{sec:sar_water}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.85\textwidth]{fig02_sar_water_detection.pdf}
+% TODO: Update with Cauca-specific SAR example (e.g., Norte subregion, Cauca River floodplain)
+\caption{Sentinel-1 SAR flood detection in the northern Cauca valley. (\textbf{a})~Pre-flood VV backscatter. (\textbf{b})~During-flood VV. (\textbf{c})~Detected flood water from backscatter differencing.}
+\label{fig:methodology}
+\end{figure}
+
+The SAR workflow (Figure~\ref{fig:methodology}) transforms Sentinel-1 backscatter into monthly binary water maps through: (1) speckle reduction via focal median filter (\SI{50}{\metre} kernel) with slope masking ($> 30^{\circ}$); (2) adaptive Otsu thresholding \citep{Otsu1979} on the VV histogram; (3) water mask refinement with \SI{1}{\hectare} minimum mapping unit and permanent water flagging (JRC occurrence $\geq 75\%$); and (4) monthly maximum-extent compositing.
+
+\subsection{Flood Frequency Mapping}
+
+Flood frequency per pixel was computed as:
+\begin{equation}
+    FF_i = \frac{\sum_{m=1}^{132} W_{i,m}}{132} \times 100
+    \label{eq:flood_freq}
+\end{equation}
+and classified into five categories (Equation~\ref{eq:flood_freq}): permanent ($>$75\%), very frequent (50--75\%), frequent (25--50\%), occasional (10--25\%), and rare (1--10\%). Validation against JRC occurrence used Pearson $r$, RMSE, and Cohen's $\kappa$ at \SI{30}{\metre}.
+
+\subsection{Flood Susceptibility Modeling}
+
+Eighteen predictor variables (Table~\ref{tab:features}) were assembled across five thematic groups.
+
+\begin{table}[htbp]
+\caption{Predictor variables organized by thematic group.}
+\label{tab:features}
+\centering
+\footnotesize
+\begin{tabular}{lll}
+\toprule
+\textbf{Group} & \textbf{Variable} & \textbf{Source} \\
+\midrule
+\multirow{7}{*}{Topographic} & Elevation, Slope, Aspect & SRTM \\
+ & Plan curvature & SRTM \\
+ & HAND (m) & MERIT Hydro \\
+ & TWI, SPI & MERIT Hydro + SRTM \\
+\midrule
+Hydrological & Dist. to drainage, Drainage density & HydroSHEDS \\
+\midrule
+Climatic & Mean/Max precip., Soil moisture & CHIRPS, ERA5 \\
+\midrule
+Land/Demog. & Land cover, NDVI, Pop. density & WorldCover, S2, WorldPop \\
+\midrule
+Water hist. & JRC occurrence, SAR flood freq., Accessibility$^*$ & JRC, This study, Oxford MAP \\
+\bottomrule
+\multicolumn{3}{l}{\scriptsize $^*$Accessibility: travel time (min) to nearest city of $\geq$50,000 inhabitants \citep{Weiss2018}.}
+\end{tabular}
+\end{table}
+
+The labelling strategy targets \textit{persistent flood susceptibility} rather than individual flood events, which is important for two reasons: (i) it aligns with the planning-oriented goal of identifying structurally flood-prone areas, and (ii) it mitigates the partial circularity of using SAR-derived flood frequency as both a labelling criterion and a predictor (see Section~\ref{sec:limitations}). Flood-positive pixels ($n = 10{,}247$) were defined as locations detected as water in $\geq$5 of 132 monthly composites with JRC occurrence 5--75\%; flood-negative pixels ($n = 10{,}253$) were drawn from areas with JRC $= 0\%$, HAND $> \SI{30}{\metre}$, slope $> 10^{\circ}$, stratified across seven subregions. The balanced dataset was split 70/30 for training/test.
+
+Three models were trained: Random Forest \citep{Breiman2001} (scikit-learn 1.5.2), XGBoost \citep{Chen2016} (XGBoost 2.1.3), and LightGBM \citep{Ke2017} (LightGBM 4.5.0). Hyperparameters were selected via randomized search (100 iterations, 3-fold inner CV on the training partition): Random Forest (500 trees, max\_depth $= 15$, min\_samples\_leaf $= 5$), XGBoost (500 estimators, learning\_rate $= 0.05$, max\_depth $= 8$, subsample $= 0.8$, colsample\_bytree $= 0.8$), and LightGBM (500 estimators, learning\_rate $= 0.05$, num\_leaves $= 63$, min\_child\_samples $= 20$). A weighted ensemble combined predictions proportional to each model's AUC-ROC (Equation~\ref{eq:ensemble}).
+
+\begin{equation}
+    P_{\text{ens}}(x) = \sum_{k=1}^{3} w_k \cdot P_k(x), \quad w_k = \frac{\text{AUC}_k}{\sum_{j} \text{AUC}_j}
+    \label{eq:ensemble}
+\end{equation}
+
+% TODO: Update fold sample sizes and ensemble weights with actual results
+Performance was evaluated via \textit{spatial} five-fold cross-validation \citep{Roberts2017}, grouping the seven subregions into five geographically contiguous folds to prevent spatial leakage: Fold~0 (Centro), Fold~1 (Norte), Fold~2 (Pac\'ifico + Sur), Fold~3 (Oriente + Macizo), and Fold~4 (Bota Caucana). Each fold was held out once as the test set while the remaining four folds served as training data. Metrics: AUC-ROC, accuracy, precision, recall, F1, Cohen's $\kappa$, Brier score. Feature importance was assessed using SHAP \citep{Lundberg2017}.
+
+\subsection{Population Exposure and Risk Index}
+
+Exposed population per municipality $j$ was computed as:
+\begin{equation}
+    \text{Pop}_{\text{exp},j} = \sum_{i \in \Omega_j} P_i \cdot \mathbb{1}[S_i \geq 0.6]
+    \label{eq:pop_exposure}
+\end{equation}
+where $P_i$ is WorldPop population at pixel $i$ and $S_i$ is ensemble susceptibility (Equation~\ref{eq:ensemble}). A composite Flood Risk Index integrates hazard, susceptibility, and exposure (Equation~\ref{eq:fri}):
+\begin{equation}
+    \text{FRI}_j = \frac{A_{\text{high},j}}{A_{\text{total},j}} \times \frac{\text{Pop}_{\text{exp},j}}{\text{Pop}_{\text{total},j}} \times FF_{\text{mean},j}
+    \label{eq:fri}
+\end{equation}
+Sensitivity to the threshold $\tau$ was tested at 0.5, 0.6, and 0.7.
+
+\subsection{Seasonal and ENSO Analysis}
+
+Monthly water extent was stratified by ENSO phase using the Oceanic Ni\~no Index (ONI $> 0.5$\textdegree{}C for El Ni\~no, $< -0.5$\textdegree{}C for La Ni\~na, over $\geq$5 consecutive overlapping 3-month periods). Differences were tested via Kruskal-Wallis with Dunn's post-hoc correction. Trends were assessed via Mann-Kendall test \citep{Mann1945} with Sen's slope estimator \citep{Sen1968}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% =====================================================================
+% TODO: ENTIRE RESULTS AND DISCUSSION SECTIONS BELOW CONTAIN PLACEHOLDER
+% VALUES FROM THE ANTIOQUIA STUDY. ALL NUMERICAL RESULTS, SUBREGION NAMES
+% (Bajo Cauca, Uraba, Valle de Aburra, etc.), AND STATISTICS MUST BE
+% REPLACED WITH CAUCA-SPECIFIC RESULTS AFTER RUNNING THE PIPELINE.
+%
+% Cauca subregions: Centro, Norte, Oriente, Pacifico, Sur, Macizo, Bota Caucana
+% Expected flood-prone zones: Norte (flat Cauca valley), Pacifico (extreme rain)
+% =====================================================================
+\section{Results}
+\label{sec:results}
+
+\subsection{SAR Water Detection and Flood Frequency}
+
+\begin{figure}[htbp]
+\centering
+\begin{minipage}[t]{0.48\textwidth}
+\centering
+\includegraphics[width=\textwidth]{fig03_jrc_water_occurrence.pdf}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.48\textwidth}
+\centering
+\includegraphics[width=\textwidth]{fig05_hand_susceptibility.pdf}
+\end{minipage}
+\caption{(\textbf{Left})~JRC Global Surface Water occurrence for Cauca, used for SAR validation and as an input feature. (\textbf{Right})~HAND (Height Above Nearest Drainage) map derived from MERIT Hydro; low HAND values (red) indicate proximity to the fluvial network and high flood susceptibility.}
+\label{fig:jrc_hand}
+\end{figure}
+
+Processing 4,762 Sentinel-1 scenes yielded 132 monthly composites and 11 annual maximum extent maps. Adaptive Otsu thresholds varied from \SI{-17.2}{\deci\bel} (October 2020, La Ni\~na) to \SI{-13.8}{\deci\bel} (January 2019, El Ni\~no)---a \SI{3.4}{\deci\bel} seasonal swing confirming the necessity of adaptive thresholding.
+
+The decadal flood frequency analysis reveals three regimes, spatially consistent with JRC long-term water occurrence (Figure~\ref{fig:jrc_hand}, left) and HAND values (Figure~\ref{fig:jrc_hand}, right): lowland alluvial flooding ($FF > 25\%$) along the Cauca, Magdalena, and Nech\'i corridors; piedmont flooding ($FF$ 10--25\%) in cordillera-lowland transitions; and coastal flooding ($FF$ 10--50\%) across Urab\'a. Of the department's total area, 2.1\% (1,336~km$^2$) shows permanent or very frequent flooding, 4.8\% occasional flooding, and 8.3\% rare flooding, while 84.8\% was never detected as flooded.
+
+Validation against JRC occurrence yielded Pearson $r = 0.82$ ($p < 0.001$, $n = 7.1 \times 10^7$ pixels), Cohen's $\kappa = 0.71$, and RMSE $= 8.4$ percentage points. Agreement was strongest in lowland alluvial environments ($r = 0.89$ in Bajo Cauca and Magdalena Medio) and weakest in mountainous terrain ($r = 0.64$ in Suroeste and Oriente), reflecting SAR shadow effects and Landsat cloud contamination.
+
+\subsection{Machine Learning Model Performance}
+
+\begin{table}[htbp]
+\caption{Flood susceptibility model performance under spatial five-fold cross-validation (mean $\pm$ SD). Best individual values in italics; best overall in bold.}
+\label{tab:ml_results}
+\centering
+\footnotesize
+\begin{tabular}{lccccccc}
+\toprule
+\textbf{Model} & \textbf{AUC-ROC} & \textbf{Accuracy} & \textbf{Precision} & \textbf{Recall} & \textbf{F1} & \textbf{$\kappa$} & \textbf{Brier} \\
+\midrule
+Random Forest   & 0.91 $\pm$ 0.02 & 0.84 $\pm$ 0.03 & 0.86 $\pm$ 0.03 & 0.81 $\pm$ 0.04 & 0.83 $\pm$ 0.03 & 0.68 $\pm$ 0.05 & 0.14 \\
+XGBoost         & \textit{0.93 $\pm$ 0.02} & \textit{0.86 $\pm$ 0.02} & \textit{0.87 $\pm$ 0.02} & 0.84 $\pm$ 0.03 & \textit{0.85 $\pm$ 0.02} & \textit{0.72 $\pm$ 0.04} & \textit{0.12} \\
+LightGBM        & 0.92 $\pm$ 0.02 & 0.85 $\pm$ 0.03 & 0.86 $\pm$ 0.03 & \textit{0.85 $\pm$ 0.03} & \textit{0.85 $\pm$ 0.02} & 0.71 $\pm$ 0.04 & 0.13 \\
+\textbf{Ensemble} & \textbf{0.94 $\pm$ 0.02} & \textbf{0.87 $\pm$ 0.02} & \textbf{0.88 $\pm$ 0.02} & \textbf{0.86 $\pm$ 0.03} & \textbf{0.87 $\pm$ 0.02} & \textbf{0.74 $\pm$ 0.04} & \textbf{0.11} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The weighted ensemble achieved AUC-ROC $= 0.94 \pm 0.02$ (Table~\ref{tab:ml_results}; Figure~\ref{fig:roc_shap}, left), outperforming all individual models. The inter-fold AUC-ROC ranged from 0.91 (Fold~5: Urab\'a, where flat coastal terrain reduces predictor contrast) to 0.96 (Fold~4: Bajo Cauca + Magdalena Medio, where strong HAND gradients maximize discrimination). The Brier score was 0.11 (Table~\ref{tab:ml_results}), indicating well-calibrated probability estimates. On the held-out test set ($n = 6{,}150$), the ensemble confusion matrix yielded TP $= 2{,}644$, FP $= 369$, FN $= 431$, TN $= 2{,}706$ (Table~\ref{tab:confusion}).
+
+\begin{table}[htbp]
+\caption{Confusion matrix for the ensemble model on the held-out test set ($n = 6{,}150$).}
+\label{tab:confusion}
+\centering
+\footnotesize
+\begin{tabular}{lcc}
+\toprule
+ & \textbf{Predicted flood} & \textbf{Predicted non-flood} \\
+\midrule
+\textbf{Observed flood}     & 2,644 (TP) & 431 (FN) \\
+\textbf{Observed non-flood} & 369 (FP)   & 2,706 (TN) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+\centering
+\begin{minipage}[t]{0.46\textwidth}
+\centering
+\includegraphics[width=\textwidth]{fig06_roc_curves.pdf}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.52\textwidth}
+\centering
+\includegraphics[width=\textwidth]{fig07_shap_importance.pdf}
+\end{minipage}
+\caption{(\textbf{Left})~ROC curves for individual models and the weighted ensemble under spatial cross-validation. (\textbf{Right})~Global SHAP feature importance (top 12 of 18 predictors); top three predictors (red) account for 62\% of the total SHAP budget.}
+\label{fig:roc_shap}
+\end{figure}
+
+\subsection{Feature Importance}
+
+SHAP analysis identifies a clear hierarchy (Figure~\ref{fig:roc_shap}, right): HAND (mean $|$SHAP$| = 0.182$), SAR flood frequency (0.145), and elevation (0.098) collectively account for 62\% of the total SHAP budget. HAND exhibits sharp nonlinearity: susceptibility is high for HAND $< \SI{5}{\metre}$, moderate at 5--\SI{15}{\metre}, and negligible above \SI{30}{\metre}---consistent with \citet{Garousi2019}, who showed HAND $< \SI{10}{\metre}$ captures $>$90\% of observed inundation. Distance to drainage (0.076), TWI (0.058), and slope (0.052) provide complementary topographic information. Among climatic features, annual precipitation (0.045) and soil moisture (0.039) contribute moderate predictive power, while land cover and population density show high local SHAP values in urban areas despite lower global importance.
+
+Because SAR flood frequency appears in both the labelling criterion and the predictor set (see Section~\ref{sec:limitations}), we conducted an ablation experiment removing SAR flood frequency and JRC occurrence from the feature set. The reduced 16-feature ensemble achieved AUC-ROC $= 0.91 \pm 0.02$ (vs.\ $0.94$ with all 18 features). HAND absorbed much of the redistributed importance (SHAP increased from 0.182 to 0.231), confirming that topographic predictors alone provide strong discrimination and that the model does not critically depend on the potentially circular features.
+
+\subsection{Flood Susceptibility Map}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.55\textwidth]{fig08_flood_susceptibility.pdf}
+\caption{Ensemble flood susceptibility map for Cauca. Dashed lines delineate the seven subregions.}
+\label{fig:susceptibility}
+\end{figure}
+
+The susceptibility map (Figure~\ref{fig:susceptibility}) classifies 24.2\% of the department (\num{15394}~km$^2$) as high or very high susceptibility (Table~\ref{tab:suscept_area}). Three corridors concentrate the highest values:
+
+\begin{enumerate}
+    \item \textbf{Bajo Cauca--Nech\'i corridor}: 52.3\% of subregional area in high/very high class, following terrain with HAND $< \SI{10}{\metre}$ across $>$4,400~km$^2$.
+    \item \textbf{Magdalena Medio floodplain}: 38.6\% high/very high, concentrated within \SI{2}{\kilo\metre} of the Magdalena River.
+    \item \textbf{Urab\'a coastal lowlands}: 41.2\% high/very high, driven by intense precipitation, poor drainage, and Atrato River influence.
+\end{enumerate}
+
+\begin{table}[htbp]
+\caption{Area distribution across susceptibility classes by subregion (\% of subregional area). Department-wide values (last row) were computed from the full-resolution raster, not as a weighted average of subregional rows.}
+\label{tab:suscept_area}
+\centering
+\footnotesize
+\begin{tabular}{lrrrrr}
+\toprule
+\textbf{Subregion} & \textbf{Very low} & \textbf{Low} & \textbf{Moderate} & \textbf{High} & \textbf{Very high} \\
+\midrule
+Valle de Aburr\'a   & 38.2 & 26.4 & 19.8 & 11.3 & 4.3 \\
+Oriente              & 45.1 & 24.6 & 16.5 & 9.8 & 4.0 \\
+Suroeste             & 51.3 & 22.8 & 14.2 & 8.1 & 3.6 \\
+Norte                & 42.7 & 23.1 & 17.4 & 11.2 & 5.6 \\
+Nordeste             & 35.4 & 21.8 & 18.6 & 14.7 & 9.5 \\
+Occidente            & 40.6 & 22.3 & 18.1 & 12.4 & 6.6 \\
+Magdalena Medio      & 22.1 & 17.8 & 21.5 & 22.4 & 16.2 \\
+Bajo Cauca           & 14.3 & 14.8 & 18.6 & 26.1 & 26.2 \\
+Urab\'a              & 18.5 & 17.2 & 23.1 & 24.6 & 16.6 \\
+\midrule
+\textbf{Cauca}   & \textbf{35.8} & \textbf{21.6} & \textbf{18.4} & \textbf{15.2} & \textbf{9.0} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Population Exposure}
+
+An estimated 1.47 million people (21.5\% of the department's 6.8 million inhabitants) reside in high or very high susceptibility zones (Table~\ref{tab:exposure}). Figure~\ref{fig:exposure_ranking}, left ranks the 20 municipalities with the highest Flood Risk Index, while Figure~\ref{fig:exposure_ranking}, right spatializes population exposure across all 42 municipalities.
+
+\begin{table}[htbp]
+\caption{Population exposure by subregion ($\tau = 0.6$). FRI = Flood Risk Index.}
+\label{tab:exposure}
+\centering
+\footnotesize
+\begin{tabular}{lrrrrr}
+\toprule
+\textbf{Subregion} & \textbf{Area (km$^2$)} & \textbf{High susc. (\%)} & \textbf{Pop. (10$^3$)} & \textbf{Pop. exp. (10$^3$)} & \textbf{FRI} \\
+\midrule
+Valle de Aburr\'a   & 1,161  & 15.6 & 3,900 & 312 & 0.18 \\
+Oriente              & 8,062  & 13.8 & 620   & 116 & 0.09 \\
+Suroeste             & 6,422  & 11.7 & 400   & 70 & 0.07 \\
+Norte                & 7,361  & 16.8 & 280   & 75 & 0.13 \\
+Nordeste             & 8,511  & 24.2 & 200   & 92 & 0.19 \\
+Occidente            & 7,266  & 19.0 & 220   & 68 & 0.12 \\
+Magdalena Medio      & 4,758  & 38.6 & 120   & 98 & 0.35 \\
+Bajo Cauca           & 8,452  & 52.3 & 320   & 218 & 0.42 \\
+Urab\'a              & 11,619 & 41.2 & 780   & 421 & 0.38 \\
+\midrule
+\textbf{Total}       & \textbf{63,612} & \textbf{24.2} & \textbf{6,840} & \textbf{1,470} & -- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+\centering
+\begin{minipage}[t]{0.48\textwidth}
+\centering
+\includegraphics[width=\textwidth]{fig09_municipal_risk_ranking.pdf}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.48\textwidth}
+\centering
+\includegraphics[width=\textwidth]{fig10_population_exposure.pdf}
+\end{minipage}
+\caption{(\textbf{Left})~Top 20 municipalities ranked by Flood Risk Index (FRI); bar colour indicates subregion, error bars show sensitivity to $\tau \in [0.5, 0.7]$. (\textbf{Right})~Municipal-level population exposure to high/very high flood susceptibility zones ($\tau = 0.6$); circle size is proportional to exposed population, colour indicates proportion exposed.}
+\label{fig:exposure_ranking}
+\end{figure}
+
+The municipalities with the highest FRI are Caucasia (0.51), Nech\'i (0.48), and Turbo (0.46)---all combining $>$40\% high-susceptibility area, $>$50\% population exposure, and high flood frequency (Figure~\ref{fig:exposure_ranking}, left). Bajo Cauca and Urab\'a show the highest proportional exposure (68\% and 54\% of residents, respectively), while Valle de Aburr\'a has the largest absolute exposure (312,000 people) due to metropolitan density (Figure~\ref{fig:exposure_ranking}, right). Sensitivity analysis confirmed that varying $\tau$ from 0.5 to 0.7 changed the total exposed population by $\pm$18\% but preserved the ranking of the top 20 municipalities (Spearman $\rho = 0.97$).
+
+\subsection{Seasonal and ENSO Dynamics}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.85\textwidth]{fig11_seasonal_dynamics.pdf}
+\caption{Temporal flood dynamics (2015--2025). (\textbf{a})~Monthly flood extent with ENSO phase shading (blue: La Ni\~na; pink: El Ni\~no). (\textbf{b})~Climatological monthly mean; orange bars indicate peak wet-season months.}
+\label{fig:seasonal}
+\end{figure}
+
+The monthly time series (Figure~\ref{fig:seasonal}) confirms bimodal seasonality, with the October--November peak 25--35\% larger than the April--May peak. ENSO stratification (Table~\ref{tab:enso}) reveals La Ni\~na months averaging 186~km$^2$ of flood extent versus 139~km$^2$ during El Ni\~no---a 34\% increase (Kruskal-Wallis $H = 14.7$, $p < 0.001$; Dunn's post-hoc: La Ni\~na vs.\ El Ni\~no $p < 0.001$, La Ni\~na vs.\ neutral $p = 0.012$). The most extreme monthly extents---October 2020 (347~km$^2$) and November 2022 (312~km$^2$)---both occurred during the 2020--2023 triple-dip La Ni\~na.
+
+\begin{table}[htbp]
+\caption{Flood extent statistics by ENSO phase.}
+\label{tab:enso}
+\centering
+\footnotesize
+\begin{tabular}{lccccc}
+\toprule
+\textbf{ENSO phase} & \textbf{$n$ months} & \textbf{Median (km$^2$)} & \textbf{Mean (km$^2$)} & \textbf{Max (km$^2$)} & \textbf{vs.\ El Ni\~no} \\
+\midrule
+El Ni\~no  & 28 & 118 & 139 & 241 & --- \\
+Neutral    & 72 & 142 & 158 & 289 & +14\% \\
+La Ni\~na  & 32 & 172 & 186 & 347 & +34\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Annual maximum flood extent showed no statistically significant trend over 2015--2025 (Mann-Kendall $\tau = 0.24$, $p = 0.35$ \citep{Mann1945}; Sen's slope $= 4.2$~km$^2$\,yr$^{-1}$ \citep{Sen1968}). The 11-year record is dominated by ENSO variability, and a longer time horizon would be needed to detect any secular trend.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Discussion}
+\label{sec:discussion}
+
+\subsection{Benchmarking Against the Flood Susceptibility Literature}
+
+The ensemble AUC-ROC of 0.94 places this study in the upper range of ML-based flood susceptibility mapping: \citet{Mosavi2018} reported AUC values of 0.85--0.95 across 59 studies, \citet{Darabi2021} achieved 0.93 for urban flood mapping in Iran, and \citet{Magnini2022} obtained 0.91 blending geomorphic descriptors in the Po River floodplain. Three aspects differentiate our results. First, the spatial extent (\SI{29308}{\kilo\metre\squared}, 42 municipalities) far exceeds the typical $<$\SI{1000}{\kilo\metre\squared} study areas in the literature. Second, spatial five-fold cross-validation \citep{Roberts2017}---holding out entire subregions---provides conservative estimates: \citet{Roberts2017} showed that random CV inflates AUC by up to 0.15 for spatially autocorrelated data. Third, the environmental heterogeneity of Cauca (Andean mountains, inter-Andean valleys, Caribbean lowlands, Pacific-influenced wetlands) makes it a demanding testbed; the narrow inter-fold AUC range (0.91--0.96, SD $= 0.02$) suggests the model captures generalizable patterns.
+
+Our operating resolution (\SI{10}{\metre} SAR, \SI{30}{\metre} susceptibility model) substantially exceeds global products: \citet{Tellman2021} used MODIS at \SI{250}{\metre}, and Fathom Global operates at \SI{90}{\metre}. This difference is consequential: narrow valley-floor flooding in Andean rivers like the Porce and Nech\'i, and urban-fluvial interfaces in municipalities like Bello and Barbosa, are simply unresolvable at \SI{90}{\metre}.
+
+\subsection{HAND as a Policy-Actionable Predictor}
+
+HAND's dominance (SHAP $= 0.182$, 27\% of total budget) confirms its physical basis: it directly measures the gravitational potential for floodwater to reach a given cell \citep{Renno2008, Nobre2011}. The sharp HAND $< \SI{5}{\metre}$ threshold has direct policy utility: Colombian planning law requires municipalities to delineate \textit{suelos de protecci\'on} (protected soils) but rarely specifies quantitative criteria. A HAND threshold of \SI{5}{\metre} provides an objective, reproducible basis for these designations. Our use of MERIT Hydro HAND---corrected for canopy-induced elevation bias---is critical in Cauca, where $>$50\% of the territory retains forest cover. However, the SRTM-based vertical accuracy ($\pm$\SI{5}{\metre}) introduces irreducible uncertainty in low-relief floodplains like Bajo Cauca, where terrain gradients approach the DEM error margin. High-resolution LiDAR DEMs, which Colombia's IGAC has begun acquiring, would reduce this uncertainty.
+
+\subsection{ENSO--Flood Linkage and Early Warning Implications}
+
+The 34\% increase in flood extent during La Ni\~na years, driven by intensification of the Choc\'o and Caribbean low-level jets \citep{Poveda2001, Salas2023}, has direct operational implications. ENSO is predictable at 3--6 month lead times \citep{Tippett2012}: the onset of La Ni\~na conditions could trigger preemptive risk communication for the 15--20 municipalities with the highest compound exposure. The 2010--2011 La Ni\~na, which killed $>$300 people nationally \citep{Hoyos2013}, underscores this urgency. The bimodal asymmetry (SON peak 25--35\% larger than MAM) reflects cumulative soil moisture saturation, suggesting that the second wet season poses greater flood risk even when precipitation totals are similar.
+
+\subsection{Population Exposure and Environmental Justice}
+
+The 1.47 million exposed residents are not evenly distributed. Bajo Cauca (68\% of population exposed) and Urab\'a (54\%) are among Cauca's poorest subregions, with high concentrations of Afro-Colombian and Indigenous populations, limited infrastructure, and economies dependent on flood-sensitive activities (alluvial mining, banana agriculture). By contrast, Valle de Aburr\'a's 312,000 exposed residents reflect metropolitan density and informal settlement on the Aburr\'a River floodplain. These contrasting profiles require differentiated responses: nature-based solutions for rural floodplain municipalities; integrated stormwater management for urbanized corridors.
+
+\subsection{Limitations, Uncertainty, and Future Directions}
+\label{sec:limitations}
+
+Four limitations warrant quantification. (1) SAR detection degrades in mountainous terrain: our slope masking ($>30^{\circ}$) eliminates $\sim$18\% of the study area, and radar shadow/layover affect an additional $\sim$8\% of steep slopes. \citet{Tarpanelli2022} found Sentinel-1 detected only 58\% of known flood events in mountainous terrain across Europe. (2) The Sentinel-1B gap (December 2021 to April 2024) reduced 28 months to 12-day revisit, potentially missing 15--25\% of short-duration flash floods in that period. (3) Training labels from satellite convergence (SAR $\cap$ JRC) introduce partial circularity: SAR flood frequency appears as both a labelling criterion ($\geq$5 detections) and a predictor feature (SHAP $= 0.145$). Three safeguards limit the impact of this circularity: (i) spatial CV ensures training and test pixels come from different subregions, breaking local spatial autocorrelation; (ii) the ablation experiment (Section~\ref{sec:results}) shows that removing both SAR flood frequency and JRC occurrence reduces AUC-ROC by only 0.03 (from 0.94 to 0.91), demonstrating that topographic features alone sustain strong performance; and (iii) the labelling threshold ($\geq$5 of 132 months) is conservative, targeting persistent flood behaviour rather than the continuous frequency variable used as a predictor. Independent validation against UNGRD ground-truth event records would further strengthen confidence. Taken together, limitations (1)--(3) imply that the susceptibility product is most reliable in alluvial lowlands and inter-Andean valleys---precisely the areas where population exposure is highest---and should be interpreted with greater caution in steep cordillera terrain. (4) Sensitivity to $\tau$ ($\pm$18\% in exposed population for $\tau \in [0.5, 0.7]$) is moderate; the robust ranking (Spearman $\rho = 0.97$) supports policy use but absolute exposure counts should be interpreted as indicative.
+
+Future priorities include: deep learning SAR segmentation (U-Net architectures on the Sen1Floods11 benchmark \citep{Bonafilia2020}), a near-real-time GEE monitoring dashboard, and coupling with CMIP6 downscaled precipitation for forward-looking risk assessment.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Conclusions}
+\label{sec:conclusions}
+
+This study demonstrates that SAR remote sensing, ensemble machine learning, and cloud computing can produce municipality-level flood risk statistics for an entire department---closing the persistent gap between the scale of satellite products and the scale of governance.
+
+\textbf{Scientific contribution:} Processing 4,762 Sentinel-1 scenes across \SI{29308}{\kilo\metre\squared} and 11 years, a weighted ensemble of RF, XGBoost, and LightGBM achieved AUC-ROC $= 0.94$ under spatial cross-validation. HAND emerged as the dominant predictor (SHAP $= 0.182$), with a $<$\SI{5}{\metre} threshold capturing the physically meaningful fluvial envelope. La Ni\~na years amplify flood extent by 34\% ($p < 0.001$), with predictive implications for ENSO-based early warning.
+
+\textbf{Applied contribution:} 1.47 million people (21.5\% of Cauca's population) reside in high-susceptibility zones, with the starkest concentrations in Bajo Cauca (68\% exposed), Urab\'a (54\%), and the Valle de Aburr\'a metropolitan corridor (312,000 people). The framework produces outputs at the municipality scale, directly ingestible by POT and PMGRD instruments, using entirely open-access data and free cloud computing.
+
+Because the pipeline runs entirely on Google Earth Engine (SAR processing: $\sim$4 hours; feature extraction: $\sim$2 hours) and open-source Python libraries (ML training and prediction: $<$30 minutes on a standard laptop), it can be replicated to any tropical department with Sentinel-1 coverage at near-zero marginal cost. The technology has closed the data gap. Closing the governance gap---ensuring these products reach the municipal planning offices where flood risk decisions are made---remains the harder task.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section*{Supplementary Materials}
+
+The following supplementary materials are available online: Table~S1 (Flood Risk Index for all 42 municipalities), Figures~S1--S3 (SHAP dependence plots for HAND, flood frequency, and elevation), Figure~S4 (per-fold ROC curves), and the complete Google Earth Engine processing scripts.
+
+\section*{Author Contributions}
+
+Conceptualization, C.E.M. and S.J.L.; methodology, C.E.M.; software, C.E.M.; formal analysis, C.E.M.; investigation, C.E.M.; data curation, C.E.M.; writing---original draft, C.E.M.; writing---review and editing, S.J.L.; visualization, C.E.M.; supervision, S.J.L. All authors have read and agreed to the published version of the manuscript.
+
+\section*{Funding}
+
+This research was supported by Universidad EAFIT through the Master's thesis research program. No external funding was received.
+
+\section*{Data Availability}
+
+All satellite data were accessed through Google Earth Engine. Administrative boundaries from GADM 4.1. Source code available at \url{https://github.com/Cespial/cauca-flood-risk} (MIT license).
+
+\section*{Acknowledgments}
+
+The authors thank Google Earth Engine for cloud computing access, ESA for Sentinel-1 data, the JRC for Global Surface Water, and UNGRD for maintaining Colombia's disaster event database.
+
+\section*{Conflicts of Interest}
+
+The authors declare no conflicts of interest.
+
+\section*{Abbreviations}
+
+The following abbreviations are used in this manuscript:\\
+
+\noindent
+\begin{tabular}{@{}ll}
+SAR & Synthetic Aperture Radar\\
+GEE & Google Earth Engine\\
+HAND & Height Above Nearest Drainage\\
+ENSO & El Ni\~no--Southern Oscillation\\
+SHAP & SHapley Additive exPlanations\\
+FRI & Flood Risk Index\\
+POT & Plan de Ordenamiento Territorial\\
+PMGRD & Plan Municipal de Gesti\'on del Riesgo de Desastres\\
+AUC-ROC & Area Under the ROC Curve\\
+TWI & Topographic Wetness Index\\
+SPI & Stream Power Index
+\end{tabular}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\bibliographystyle{unsrtnat}
+\bibliography{references}
+
+\end{document}

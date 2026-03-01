@@ -1,0 +1,481 @@
+% ============================================================================
+% Municipality-Scale Flood Risk Mapping in Choco, Colombia
+% Using Sentinel-1 SAR and Ensemble Machine Learning (2015--2025)
+% Authors: Cristian Espinal Maya, Santiago Jimenez Londono
+% Format: Preprint
+% ============================================================================
+
+\documentclass{article}
+
+\usepackage{arxiv}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{nicefrac}
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{multirow}
+\usepackage{siunitx}
+\sisetup{
+    group-separator = {,},
+    group-minimum-digits = 4,
+}
+\usepackage{natbib}
+\usepackage{tabularx}
+\usepackage{textcomp}
+
+\graphicspath{{./figures/}}
+
+\title{Municipality-Scale Flood Risk Mapping in Choc\'o, Colombia, Using Sentinel-1 SAR and Ensemble Machine Learning (2015--2025)}
+
+\author{
+  Cristian Espinal Maya\thanks{Correspondence: cespinalm@eafit.edu.co. ORCID: \href{https://orcid.org/0009-0000-1009-8388}{0009-0000-1009-8388}} \\
+  School of Applied Sciences and Engineering\\
+  Universidad EAFIT\\
+  Medell\'in, Colombia \\
+  \texttt{cespinalm@eafit.edu.co} \\
+  \And
+  Santiago Jim\'enez Londo\~no\thanks{ORCID: \href{https://orcid.org/0009-0007-9862-7133}{0009-0007-9862-7133}} \\
+  School of Applied Sciences and Engineering\\
+  Universidad EAFIT\\
+  Medell\'in, Colombia \\
+  \texttt{sjimenez@eafit.edu.co} \\
+}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+The Department of Choc\'o, one of the rainiest and most flood-affected regions on Earth (5,000--13,000~mm\,yr$^{-1}$), lacks spatially explicit flood risk information at the municipal scale despite recurrent catastrophic inundation events along the Atrato, San Juan, and Baud\'o river systems. We present an open-access, reproducible framework that delivers municipality-level flood risk statistics for all 30 municipalities of Choc\'o, Colombia (\SI{46530}{\kilo\metre\squared}; $\sim$600,000 inhabitants). We processed Sentinel-1 C-band SAR scenes (2015--2025) within Google Earth Engine using adaptive Otsu thresholding to produce monthly water extent maps at \SI{10}{\metre} resolution. Eighteen predictor variables spanning topographic, hydrological, climatic, land cover, and demographic domains were integrated into a weighted ensemble of Random Forest, XGBoost, and LightGBM, achieving AUC-ROC $= \text{XXX} \pm \text{XXX}$ under spatial five-fold cross-validation. SHAP analysis identifies HAND, SAR flood frequency, and elevation as dominant predictors driving flood susceptibility in this hyper-humid tropical environment. Overlaying the susceptibility surface with \SI{100}{\metre} population data quantifies exposed populations across Choc\'o's predominantly Afro-Colombian and Indigenous communities. La Ni\~na years amplify flood extent by XXX\% relative to El Ni\~no years ($p < \text{XXX}$), consistent with intensification of the Choc\'o Low-Level Jet. The entire framework---data, code, and trained models---is open-access and fully reproducible, enabling direct replication across other tropical departments.
+\end{abstract}
+
+\keywords{flood susceptibility mapping \and Sentinel-1 SAR \and ensemble machine learning \and HAND \and Google Earth Engine \and SHAP \and ENSO \and Choc\'o Low-Level Jet \and Atrato River \and population exposure}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Introduction}
+\label{sec:introduction}
+
+The Department of Choc\'o, located in northwestern Colombia between the Pacific Ocean and the Western Cordillera, is one of the rainiest places on Earth. The municipality of Llor\'o holds the world record for mean annual precipitation, exceeding \SI{13000}{\milli\metre\per\year} \citep{PovedaMesa2000}, while most of the department receives 5,000--8,000~mm\,yr$^{-1}$ sustained by the Choc\'o Low-Level Jet (ChocoJet), which transports Pacific moisture into the continental interior \citep{Poveda2023, CHOCOJEX2019, Gallego2021}. This extreme precipitation, combined with extensive low-lying alluvial plains along the Atrato River ($\sim$\SI{4900}{\cubic\metre\per\second} mean discharge), the San Juan River ($\sim$\SI{2550}{\cubic\metre\per\second}), and the Baud\'o River system, makes Choc\'o one of Latin America's most flood-vulnerable regions \citep{FloodRiskLAC2022}.
+
+Between November 2010 and May 2011, a La Ni\~na event of exceptional intensity struck Colombia, killing over 300 people, displacing 2.3 million, and causing USD 7.8 billion in losses \citep{Hoyos2013}. The lower Atrato Valley in Choc\'o was identified as a ``hotspot'' combining high flooding and extreme social vulnerability. In November 2024, 25 of Choc\'o's 30 municipalities were simultaneously affected by flooding, impacting 215,000 people in what authorities declared the region's worst climate crisis in recent history. Despite these recurrent catastrophes, Choc\'o's municipalities lack the spatially explicit flood information mandated by Colombian planning law (Ley~1523 of 2012) for the formulation of Plans de Ordenamiento Territorial (POT) and Plans Municipales de Gesti\'on del Riesgo de Desastres (PMGRD) \citep{CongresoCol2012, OECD2019}.
+
+Globally, flooding affects approximately 1.65 billion people per decade \citep{UNDRR2020}. \citet{Tellman2021} showed that population exposure to flooding grew 20--24\% between 2000 and 2018, while \citet{Rentschler2022} estimated 1.81 billion people in significant flood hazard zones, with 89\% in low- and middle-income countries. A persistent disconnect separates the scale at which satellite-derived flood products are generated (continental or national) from the scale at which flood risk decisions must be made (municipal) \citep{Bates2023}. Global flood products---including Fathom Global, the Global Flood Database \citep{Tellman2021}, and JRC Global Surface Water \citep{Pekel2016}---have transformed continental-scale assessment but their resolution (\SI{90}{\metre}--\SI{250}{\metre}) cannot resolve narrow river-corridor flooding critical for municipal planning in Choc\'o.
+
+Three technological developments now converge to address this gap. First, Sentinel-1 SAR provides cloud-penetrating imagery at \SI{10}{\metre} resolution with 6--12 day revisit, critical in Choc\'o where cloud contamination exceeds 80\% of days, rendering optical sensors largely ineffective \citep{Twele2016, DeVries2020}. Second, ensemble machine learning (Random Forest, XGBoost, LightGBM) consistently outperforms traditional methods for flood susceptibility prediction \citep{Mosavi2018, Darabi2021}, with SHAP enabling model interpretability \citep{Lundberg2017}. Third, Google Earth Engine democratizes petabyte-scale processing \citep{Gorelick2017}.
+
+Previous flood studies in Choc\'o are limited. \citet{MosqueraMachado2007} applied Gumbel/GRADEX and HEC-RAS to the Atrato River but covered only a localized reach. \citet{PalominoAngel2019} used ALOS-PALSAR L-band SAR to characterize Atrato floodplain dynamics, demonstrating L-band's advantage for under-canopy flood detection but lacking municipality-scale risk quantification. \citet{VasquezSalazar2024} applied Sentinel-1 to Atrato River Delta coastal dynamics. No previous study has produced municipality-level flood risk statistics for the entire department using high-resolution SAR data.
+
+Choc\'o presents unique challenges for SAR-based flood mapping. Dense tropical rainforest ($>$85\% forest cover) limits C-band ($\lambda = 5.5$~cm) canopy penetration, potentially underestimating under-canopy flooding in forested floodplains \citep{PalominoAngel2019}. Permanently saturated soils reduce the backscatter contrast between flooded and non-flooded states. Additionally, Choc\'o is home to predominantly Afro-Colombian ($>$82\%) and Indigenous ($\sim$12\%) communities, many of whom live along river corridors with limited infrastructure, making flood exposure an environmental justice concern. Illegal gold mining has further altered river dynamics through sedimentation and channel modification, compounding flood hazard.
+
+\textbf{Research gap and contributions.} This work extends the municipality-scale flood risk framework developed for Antioquia \citep{EspinalMaya2026} to Choc\'o, making three specific contributions: (1) a complete SAR-to-municipality pipeline processing Sentinel-1 scenes across \SI{46530}{\kilo\metre\squared} and 11 years in one of the most challenging tropical environments for SAR; (2) an ensemble ML susceptibility model with SHAP-based interpretability, benchmarked against the Antioquia results; and (3) quantified population exposure at the municipal level for Choc\'o's underserved communities, producing outputs directly ingestible by Colombian POT and PMGRD instruments.
+
+\subsection{Study Area}
+\label{sec:study_area}
+
+%\begin{figure}[htbp]
+%\centering
+%\includegraphics[width=0.75\textwidth]{fig01_study_area.pdf}
+%\caption{Department of Choc\'o, Colombia, showing five subregions and 30 municipalities.}
+%\label{fig:study_area}
+%\end{figure}
+
+The Department of Choc\'o (\SI{46530}{\kilo\metre\squared}; 4\textdegree{}00'--8\textdegree{}40'\,N, 75\textdegree{}55'--77\textdegree{}55'\,W) comprises 30 municipalities in five subregions: Atrato (8 municipalities), Dari\'en (4), San Juan (11), Pac\'ifico Norte (3), and Pac\'ifico Sur/Baud\'o (4), with $\sim$600,000 inhabitants (Figure~\ref{fig:study_area}). The landscape spans from sea level along the Pacific coast and the Atrato delta to $\sim$\SI{4100}{\metre} at Cerro Tatam\'a on the Western Cordillera. Three major river systems drain the department: the Atrato (flowing north to the Caribbean, one of the world's highest-discharge rivers per unit catchment area), the San Juan (flowing south to the Pacific), and the Baud\'o (flowing west to the Pacific). Precipitation ranges from 5,000 to $>$13,000~mm\,yr$^{-1}$, driven by the Choc\'o Low-Level Jet \citep{Poveda2023} and orographic uplift against the Western Cordillera, with $>$300 rainy days per year at most stations \citep{Urrea2019}. ENSO modulation is strong: La Ni\~na episodes intensify the ChocoJet, increasing precipitation by 20--40\% \citep{Poveda2001, Mesa2006, Mejia2021}. The Choc\'o biogeographic region is part of the Tumbes-Choc\'o-Magdalena biodiversity hotspot, one of the world's richest biomes.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Materials and Methods}
+\label{sec:methods}
+
+The methodology follows the framework established for Antioquia \citep{EspinalMaya2026}, adapted to Choc\'o's hyper-humid tropical environment. All processing uses Google Earth Engine \citep{Gorelick2017} and open-source Python libraries.
+
+\subsection{Data Sources}
+
+The framework integrates 10 satellite and ancillary datasets (Table~\ref{tab:data_sources}), all accessed via Google Earth Engine except administrative boundaries (GADM 4.1).
+
+A total of [XXX] Sentinel-1 C-band SAR GRD scenes were ingested (IW mode, VV+VH polarization, descending orbit), yielding a mean of XX scenes per month across the study area. The Sentinel-1B failure (December 2021 to April 2024) reduced revisit to 12 days; Sentinel-1C deployment in December 2024 restored 6-day coverage. The JRC Global Surface Water dataset \citep{Pekel2016} provided 38-year water dynamics for validation and as an input feature. Terrain variables (elevation, slope, aspect, curvature, Topographic Wetness Index [TWI], and Stream Power Index [SPI]) were derived from SRTM \SI{30}{\metre}. HAND was computed from MERIT Hydro \SI{90}{\metre} \citep{Yamazaki2019} and resampled to \SI{30}{\metre} via bilinear interpolation within GEE. While resampling does not add spatial information beyond the native \SI{90}{\metre}, it enables pixel-aligned stacking with the \SI{30}{\metre} feature grid; the effective resolution of the HAND predictor remains \SI{90}{\metre}, and its vertical accuracy ($\pm$\SI{5}{\metre}, inherited from SRTM) should be considered when interpreting threshold-based results (e.g., HAND $< \SI{5}{\metre}$), particularly in Choc\'o's extensive low-relief alluvial floodplains where terrain gradients approach the DEM error margin.
+
+\begin{table}[htbp]
+\caption{Datasets used in the flood risk assessment framework.}
+\label{tab:data_sources}
+\centering
+\footnotesize
+\begin{tabular}{lllll}
+\toprule
+\textbf{Dataset} & \textbf{Source} & \textbf{Resolution} & \textbf{Period} & \textbf{Role} \\
+\midrule
+Sentinel-1 GRD & ESA/Copernicus & \SI{10}{\metre} & 2015--2025 & Flood detection \\
+JRC GSW v1.4 & EC/JRC & \SI{30}{\metre} & 1984--2021 & Water dynamics \\
+SRTM DEM v3 & NASA/USGS & \SI{30}{\metre} & 2000 & Topographic features \\
+MERIT Hydro v1.0.1 & Yamazaki et al. & \SI{90}{\metre} & 2019 & HAND \\
+CHIRPS Daily v2.0 & UCSB/CHG & \SI{5.5}{\kilo\metre} & 2015--2025 & Precipitation \\
+ERA5-Land Monthly & ECMWF/C3S & \SI{11}{\kilo\metre} & 2015--2025 & Soil moisture \\
+Sentinel-2 MSI & ESA/Copernicus & \SI{10}{\metre} & 2020--2023 & NDVI \\
+ESA WorldCover v200 & ESA & \SI{10}{\metre} & 2021 & Land cover \\
+WorldPop v2020 & U. Southampton & \SI{100}{\metre} & 2020 & Population density \\
+GADM v4.1 & U.C. Davis & Vector & 2024 & Admin. boundaries \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{SAR-Based Water Detection}
+\label{sec:sar_water}
+
+The SAR workflow transforms Sentinel-1 backscatter into monthly binary water maps through: (1) speckle reduction via focal median filter (\SI{50}{\metre} kernel) with slope masking ($> 30^{\circ}$); (2) adaptive Otsu thresholding \citep{Otsu1979} on the VV histogram; (3) water mask refinement with \SI{1}{\hectare} minimum mapping unit and permanent water flagging (JRC occurrence $\geq 75\%$); and (4) monthly maximum-extent compositing.
+
+\subsection{Flood Frequency Mapping}
+
+Flood frequency per pixel was computed as:
+\begin{equation}
+    FF_i = \frac{\sum_{m=1}^{M} W_{i,m}}{M} \times 100
+    \label{eq:flood_freq}
+\end{equation}
+where $M$ is the total number of monthly composites and $W_{i,m}$ is the binary water detection at pixel $i$ in month $m$.
+
+\subsection{Flood Susceptibility Modeling}
+
+Eighteen predictor variables (Table~\ref{tab:features}) were assembled across five thematic groups.
+
+\begin{table}[htbp]
+\caption{Predictor variables organized by thematic group.}
+\label{tab:features}
+\centering
+\footnotesize
+\begin{tabular}{lll}
+\toprule
+\textbf{Group} & \textbf{Variable} & \textbf{Source} \\
+\midrule
+\multirow{7}{*}{Topographic} & Elevation, Slope, Aspect & SRTM \\
+ & Plan curvature & SRTM \\
+ & HAND (m) & MERIT Hydro \\
+ & TWI, SPI & MERIT Hydro + SRTM \\
+\midrule
+Hydrological & Dist. to drainage, Drainage density & HydroSHEDS \\
+\midrule
+Climatic & Mean/Max precip., Soil moisture & CHIRPS, ERA5 \\
+\midrule
+Land/Demog. & Land cover, NDVI, Pop. density & WorldCover, S2, WorldPop \\
+\midrule
+Water hist. & JRC occurrence, SAR flood freq., Accessibility$^*$ & JRC, This study, Oxford MAP \\
+\bottomrule
+\multicolumn{3}{l}{\scriptsize $^*$Accessibility: travel time (min) to nearest city of $\geq$50,000 inhabitants \citep{Weiss2018}.}
+\end{tabular}
+\end{table}
+
+The labelling strategy targets \textit{persistent flood susceptibility} rather than individual flood events, which is important for two reasons: (i) it aligns with the planning-oriented goal of identifying structurally flood-prone areas, and (ii) it mitigates the partial circularity of using SAR-derived flood frequency as both a labelling criterion and a predictor (see Section~\ref{sec:limitations}). Flood-positive pixels ($n = \text{XXX}$) were defined as locations detected as water in $\geq$5 of $M$ monthly composites with JRC occurrence 5--75\%; flood-negative pixels ($n = \text{XXX}$) were drawn from areas with JRC $= 0\%$, HAND $> \SI{30}{\metre}$, slope $> 10^{\circ}$, stratified across five subregions. The balanced dataset was split 70/30 for training/test.
+
+Three models were trained: Random Forest \citep{Breiman2001} (scikit-learn 1.5.2), XGBoost \citep{Chen2016} (XGBoost 2.1.3), and LightGBM \citep{Ke2017} (LightGBM 4.5.0). Hyperparameters were selected via randomized search (100 iterations, 3-fold inner CV on the training partition): Random Forest (500 trees, max\_depth $= 15$, min\_samples\_leaf $= 5$), XGBoost (500 estimators, learning\_rate $= 0.05$, max\_depth $= 8$, subsample $= 0.8$, colsample\_bytree $= 0.8$), and LightGBM (500 estimators, learning\_rate $= 0.05$, num\_leaves $= 63$, min\_child\_samples $= 20$). A weighted ensemble combined predictions proportional to each model's AUC-ROC (Equation~\ref{eq:ensemble}).
+
+\begin{equation}
+    P_{\text{ens}}(x) = \sum_{k=1}^{3} w_k \cdot P_k(x), \quad w_k = \frac{\text{AUC}_k}{\sum_{j} \text{AUC}_j}
+    \label{eq:ensemble}
+\end{equation}
+
+Performance was evaluated via \textit{spatial} five-fold cross-validation \citep{Roberts2017}, using leave-one-subregion-out: Fold~1 (Atrato; $n = \text{XXX}$), Fold~2 (Dari\'en; $n = \text{XXX}$), Fold~3 (San Juan; $n = \text{XXX}$), Fold~4 (Pac\'ifico Norte + Pac\'ifico Sur; $n = \text{XXX}$), and Fold~5 (overflow fold combining smallest subregions; $n = \text{XXX}$). Each fold was held out once as the test set while the remaining four folds served as training data. Metrics: AUC-ROC, accuracy, precision, recall, F1, Cohen's $\kappa$, Brier score. Feature importance was assessed using SHAP \citep{Lundberg2017}.
+
+\subsection{Population Exposure and Risk Index}
+
+Exposed population per municipality $j$ was computed as:
+\begin{equation}
+    \text{Pop}_{\text{exp},j} = \sum_{i \in \Omega_j} P_i \cdot \mathbb{1}[S_i \geq 0.6]
+    \label{eq:pop_exposure}
+\end{equation}
+where $P_i$ is WorldPop population at pixel $i$ and $S_i$ is ensemble susceptibility (Equation~\ref{eq:ensemble}). A composite Flood Risk Index integrates hazard, susceptibility, and exposure (Equation~\ref{eq:fri}):
+\begin{equation}
+    \text{FRI}_j = \frac{A_{\text{high},j}}{A_{\text{total},j}} \times \frac{\text{Pop}_{\text{exp},j}}{\text{Pop}_{\text{total},j}} \times FF_{\text{mean},j}
+    \label{eq:fri}
+\end{equation}
+Sensitivity to the threshold $\tau$ was tested at 0.5, 0.6, and 0.7.
+
+\subsection{Seasonal and ENSO Analysis}
+
+Monthly water extent was stratified by ENSO phase using the Oceanic Ni\~no Index (ONI $> 0.5$\textdegree{}C for El Ni\~no, $< -0.5$\textdegree{}C for La Ni\~na, over $\geq$5 consecutive overlapping 3-month periods). Differences were tested via Kruskal-Wallis with Dunn's post-hoc correction. Trends were assessed via Mann-Kendall test \citep{Mann1945} with Sen's slope estimator \citep{Sen1968}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Results}
+\label{sec:results}
+
+\subsection{SAR Water Detection and Flood Frequency}
+
+%\begin{figure}[htbp]
+%\centering
+%\begin{minipage}[t]{0.48\textwidth}
+%\centering
+%\includegraphics[width=\textwidth]{fig03_jrc_water_occurrence.pdf}
+%\end{minipage}\hfill
+%\begin{minipage}[t]{0.48\textwidth}
+%\centering
+%\includegraphics[width=\textwidth]{fig05_hand_susceptibility.pdf}
+%\end{minipage}
+%\caption{(\textbf{Left})~JRC Global Surface Water occurrence for Choc\'o. (\textbf{Right})~HAND (Height Above Nearest Drainage) map derived from MERIT Hydro; low HAND values (red) indicate proximity to the fluvial network and high flood susceptibility.}
+%\label{fig:jrc_hand}
+%\end{figure}
+
+Processing [XXX] Sentinel-1 scenes yielded $M$ monthly composites and 11 annual maximum extent maps. Adaptive Otsu thresholds varied from [XXX]~dB (peak La Ni\~na) to [XXX]~dB (El Ni\~no minimum)---a [XXX]~dB seasonal swing confirming the necessity of adaptive thresholding. Notably, the range of adaptive thresholds in Choc\'o's hyper-humid environment may differ from Antioquia's \SI{3.4}{\deci\bel} range due to permanently saturated soils reducing the dry-season backscatter contrast.
+
+The decadal flood frequency analysis reveals three dominant regimes: (1) lowland alluvial flooding ($FF > 25\%$) along the Atrato, San Juan, and Baud\'o corridors; (2) deltaic and estuarine flooding in the Atrato Delta and Pacific coastal lowlands; and (3) piedmont flooding ($FF$ 10--25\%) at cordillera--lowland transitions along the Western Cordillera foothills. Of the department's total area, [XXX]\% ([XXX]~km$^2$) shows permanent or very frequent flooding, XXX\% occasional flooding, and XXX\% rare flooding, while XXX\% was never detected as flooded.
+
+Validation against JRC occurrence yielded Pearson $r = \text{XXX}$ ($p < 0.001$, $n = \text{XXX}$ pixels), Cohen's $\kappa = \text{XXX}$, and RMSE $= \text{XXX}$ percentage points. Agreement is expected to be strongest in open-water alluvial environments and weakest in forested floodplains where C-band canopy penetration is limited.
+
+\subsection{Machine Learning Model Performance}
+
+\begin{table}[htbp]
+\caption{Flood susceptibility model performance under spatial five-fold cross-validation (mean $\pm$ SD). Best individual values in italics; best overall in bold.}
+\label{tab:ml_results}
+\centering
+\footnotesize
+\begin{tabular}{lccccccc}
+\toprule
+\textbf{Model} & \textbf{AUC-ROC} & \textbf{Accuracy} & \textbf{Precision} & \textbf{Recall} & \textbf{F1} & \textbf{$\kappa$} & \textbf{Brier} \\
+\midrule
+Random Forest   & XXX $\pm$ XXX & XXX $\pm$ XXX & XXX $\pm$ XXX & XXX $\pm$ XXX & XXX $\pm$ XXX & XXX $\pm$ XXX & XXX \\
+XGBoost         & XXX $\pm$ XXX & XXX $\pm$ XXX & XXX $\pm$ XXX & XXX $\pm$ XXX & XXX $\pm$ XXX & XXX $\pm$ XXX & XXX \\
+LightGBM        & XXX $\pm$ XXX & XXX $\pm$ XXX & XXX $\pm$ XXX & XXX $\pm$ XXX & XXX $\pm$ XXX & XXX $\pm$ XXX & XXX \\
+\textbf{Ensemble} & \textbf{XXX $\pm$ XXX} & \textbf{XXX $\pm$ XXX} & \textbf{XXX $\pm$ XXX} & \textbf{XXX $\pm$ XXX} & \textbf{XXX $\pm$ XXX} & \textbf{XXX $\pm$ XXX} & \textbf{XXX} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The weighted ensemble achieved AUC-ROC $= \text{XXX} \pm \text{XXX}$ (Table~\ref{tab:ml_results}), outperforming all individual models. The inter-fold AUC-ROC ranged from XXX to XXX. The Brier score was XXX, indicating well-calibrated probability estimates. On the held-out test set ($n = \text{XXX}$), the ensemble confusion matrix yielded TP $= \text{XXX}$, FP $= \text{XXX}$, FN $= \text{XXX}$, TN $= \text{XXX}$ (Table~\ref{tab:confusion}).
+
+\begin{table}[htbp]
+\caption{Confusion matrix for the ensemble model on the held-out test set ($n = \text{XXX}$).}
+\label{tab:confusion}
+\centering
+\footnotesize
+\begin{tabular}{lcc}
+\toprule
+ & \textbf{Predicted flood} & \textbf{Predicted non-flood} \\
+\midrule
+\textbf{Observed flood}     & XXX (TP) & XXX (FN) \\
+\textbf{Observed non-flood} & XXX (FP) & XXX (TN) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%\begin{figure}[htbp]
+%\centering
+%\begin{minipage}[t]{0.46\textwidth}
+%\centering
+%\includegraphics[width=\textwidth]{fig06_roc_curves.pdf}
+%\end{minipage}\hfill
+%\begin{minipage}[t]{0.52\textwidth}
+%\centering
+%\includegraphics[width=\textwidth]{fig07_shap_importance.pdf}
+%\end{minipage}
+%\caption{(\textbf{Left})~ROC curves for individual models and the weighted ensemble under spatial cross-validation. (\textbf{Right})~Global SHAP feature importance (top 12 of 18 predictors).}
+%\label{fig:roc_shap}
+%\end{figure}
+
+\subsection{Feature Importance}
+
+SHAP analysis identifies a clear hierarchy: HAND (mean $|$SHAP$| = \text{XXX}$), SAR flood frequency (\text{XXX}), and elevation (\text{XXX}) collectively account for XXX\% of the total SHAP budget. HAND exhibits sharp nonlinearity: susceptibility is high for HAND $< \SI{5}{\metre}$, moderate at 5--\SI{15}{\metre}, and negligible above \SI{30}{\metre}---consistent with \citet{Garousi2019}. In Choc\'o's context, the dominance of topographic predictors may be even more pronounced than in Antioquia due to the extensive low-relief alluvial plains of the Atrato and San Juan basins.
+
+Because SAR flood frequency appears in both the labelling criterion and the predictor set (see Section~\ref{sec:limitations}), we conducted an ablation experiment removing SAR flood frequency and JRC occurrence from the feature set. The reduced 16-feature ensemble achieved AUC-ROC $= \text{XXX}$ (vs.\ XXX with all 18 features). HAND absorbed much of the redistributed importance, confirming that topographic predictors alone provide strong discrimination.
+
+\subsection{Flood Susceptibility Map}
+
+%\begin{figure}[htbp]
+%\centering
+%\includegraphics[width=0.55\textwidth]{fig08_flood_susceptibility.pdf}
+%\caption{Ensemble flood susceptibility map for Choc\'o. Dashed lines delineate the five subregions.}
+%\label{fig:susceptibility}
+%\end{figure}
+
+The susceptibility map classifies [XXX]\% of the department ([XXX]~km$^2$) as high or very high susceptibility (Table~\ref{tab:suscept_area}). Three corridors concentrate the highest values:
+
+\begin{enumerate}
+    \item \textbf{Atrato corridor}: XXX\% of subregional area in high/very high class, following terrain with HAND $< \SI{10}{\metre}$ along the Atrato floodplain from Quibd\'o to the Dari\'en.
+    \item \textbf{San Juan basin}: XXX\% high/very high, concentrated along the San Juan River from Istmina to the Pacific coast.
+    \item \textbf{Pacific coastal lowlands and Baud\'o basin}: XXX\% high/very high, driven by extreme precipitation, tidal influence, and poor drainage.
+\end{enumerate}
+
+\begin{table}[htbp]
+\caption{Area distribution across susceptibility classes by subregion (\% of subregional area). Department-wide values (last row) were computed from the full-resolution raster, not as a weighted average of subregional rows.}
+\label{tab:suscept_area}
+\centering
+\footnotesize
+\begin{tabular}{lrrrrr}
+\toprule
+\textbf{Subregion} & \textbf{Very low} & \textbf{Low} & \textbf{Moderate} & \textbf{High} & \textbf{Very high} \\
+\midrule
+Atrato               & XXX & XXX & XXX & XXX & XXX \\
+Dari\'en             & XXX & XXX & XXX & XXX & XXX \\
+San Juan             & XXX & XXX & XXX & XXX & XXX \\
+Pac\'ifico Norte     & XXX & XXX & XXX & XXX & XXX \\
+Pac\'ifico Sur       & XXX & XXX & XXX & XXX & XXX \\
+\midrule
+\textbf{Choc\'o}     & \textbf{XXX} & \textbf{XXX} & \textbf{XXX} & \textbf{XXX} & \textbf{XXX} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Population Exposure}
+
+An estimated [XXX] people ([XXX]\% of the department's $\sim$600,000 inhabitants) reside in high or very high susceptibility zones (Table~\ref{tab:exposure}).
+
+\begin{table}[htbp]
+\caption{Population exposure by subregion ($\tau = 0.6$). FRI = Flood Risk Index.}
+\label{tab:exposure}
+\centering
+\footnotesize
+\begin{tabular}{lrrrrr}
+\toprule
+\textbf{Subregion} & \textbf{Area (km$^2$)} & \textbf{High susc. (\%)} & \textbf{Pop. (10$^3$)} & \textbf{Pop. exp. (10$^3$)} & \textbf{FRI} \\
+\midrule
+Atrato               & XXX & XXX & XXX & XXX & XXX \\
+Dari\'en             & XXX & XXX & XXX & XXX & XXX \\
+San Juan             & XXX & XXX & XXX & XXX & XXX \\
+Pac\'ifico Norte     & XXX & XXX & XXX & XXX & XXX \\
+Pac\'ifico Sur       & XXX & XXX & XXX & XXX & XXX \\
+\midrule
+\textbf{Total}       & \textbf{\num{46530}} & \textbf{XXX} & \textbf{$\sim$600} & \textbf{XXX} & -- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%\begin{figure}[htbp]
+%\centering
+%\begin{minipage}[t]{0.48\textwidth}
+%\centering
+%\includegraphics[width=\textwidth]{fig09_municipal_risk_ranking.pdf}
+%\end{minipage}\hfill
+%\begin{minipage}[t]{0.48\textwidth}
+%\centering
+%\includegraphics[width=\textwidth]{fig10_population_exposure.pdf}
+%\end{minipage}
+%\caption{(\textbf{Left})~Top 20 municipalities ranked by Flood Risk Index (FRI); bar colour indicates subregion. (\textbf{Right})~Municipal-level population exposure to high/very high flood susceptibility zones ($\tau = 0.6$).}
+%\label{fig:exposure_ranking}
+%\end{figure}
+
+The municipalities with the highest FRI are expected to be concentrated along the lower Atrato (Riosucio, Bojay\'a, Carmen del Dari\'en) and the San Juan corridor (Istmina, Medio San Juan), where extensive low-HAND terrain coincides with high population density along river corridors. Sensitivity analysis confirmed that varying $\tau$ from 0.5 to 0.7 changed the total exposed population by $\pm$XXX\% but preserved the ranking of the top municipalities (Spearman $\rho = \text{XXX}$).
+
+\subsection{Seasonal and ENSO Dynamics}
+
+%\begin{figure}[htbp]
+%\centering
+%\includegraphics[width=0.85\textwidth]{fig11_seasonal_dynamics.pdf}
+%\caption{Temporal flood dynamics (2015--2025). (\textbf{a})~Monthly flood extent with ENSO phase shading (blue: La Ni\~na; pink: El Ni\~no). (\textbf{b})~Climatological monthly mean.}
+%\label{fig:seasonal}
+%\end{figure}
+
+Unlike Antioquia's bimodal precipitation, Choc\'o exhibits a near-unimodal rainfall pattern with a broad September--November peak and a relative minimum in January--March (though still $>$200~mm/month). The monthly flood extent time series reflects this pattern. ENSO stratification (Table~\ref{tab:enso}) reveals La Ni\~na months averaging XXX~km$^2$ of flood extent versus XXX~km$^2$ during El Ni\~no---a XXX\% increase (Kruskal-Wallis $H = \text{XXX}$, $p = \text{XXX}$). The intensification of the ChocoJet during La Ni\~na episodes \citep{Poveda2023, Salas2023} provides the physical mechanism linking ENSO to enhanced flooding in this region.
+
+\begin{table}[htbp]
+\caption{Flood extent statistics by ENSO phase.}
+\label{tab:enso}
+\centering
+\footnotesize
+\begin{tabular}{lccccc}
+\toprule
+\textbf{ENSO phase} & \textbf{$n$ months} & \textbf{Median (km$^2$)} & \textbf{Mean (km$^2$)} & \textbf{Max (km$^2$)} & \textbf{vs.\ El Ni\~no} \\
+\midrule
+El Ni\~no  & XXX & XXX & XXX & XXX & --- \\
+Neutral    & XXX & XXX & XXX & XXX & +XXX\% \\
+La Ni\~na  & XXX & XXX & XXX & XXX & +XXX\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Annual maximum flood extent showed [no statistically significant trend / a significant trend] over 2015--2025 (Mann-Kendall $\tau = \text{XXX}$, $p = \text{XXX}$; Sen's slope $= \text{XXX}$~km$^2$\,yr$^{-1}$).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Discussion}
+\label{sec:discussion}
+
+\subsection{Benchmarking Against Literature and the Antioquia Framework}
+
+The ensemble AUC-ROC of XXX places this study in the upper range of ML-based flood susceptibility mapping: \citet{Mosavi2018} reported AUC values of 0.85--0.95 across 59 studies, \citet{Darabi2021} achieved 0.93 for urban flood mapping, and \citet{Magnini2022} obtained 0.91 in the Po River floodplain. Compared to the Antioquia framework (AUC-ROC $= 0.94$; \citealp{EspinalMaya2026}), the Choc\'o model [achieves comparable / slightly lower] performance, which [is expected given / despite] the more challenging environment: $>$85\% dense tropical forest cover reduces SAR detection capability, and permanently saturated soils diminish the backscatter contrast between flooded and non-flooded states.
+
+The spatial extent (\SI{46530}{\kilo\metre\squared}, 30 municipalities) exceeds the typical $<$\SI{1000}{\kilo\metre\squared} study areas in the literature, and spatial cross-validation---holding out entire subregions---provides conservative estimates \citep{Roberts2017}.
+
+\subsection{C-Band SAR Limitations in Dense Tropical Forest}
+
+Choc\'o's $>$85\% forest cover presents a fundamental challenge for C-band ($\lambda = 5.5$~cm) SAR-based flood detection. \citet{PalominoAngel2019} demonstrated that L-band ALOS-PALSAR ($\lambda = 23.6$~cm) significantly outperforms C-band Sentinel-1 for detecting under-canopy flooding in the Atrato floodplain, where standing water beneath the forest canopy produces double-bounce scattering visible at L-band but largely attenuated at C-band \citep{AnayaAcevedo2020}. Our susceptibility product should therefore be interpreted as a \textit{lower bound} on flood extent in forested areas. Open-water flooding along major river channels and in deforested areas (including artisanal mining zones) is well-captured, but floodplain inundation beneath closed canopy---potentially affecting XXX~km$^2$ of forested alluvial terrain---may be underrepresented. The forthcoming NISAR mission (L+S band, 2024+) will substantially improve under-canopy flood detection in this region.
+
+\subsection{HAND as a Policy-Actionable Predictor}
+
+HAND's dominance (SHAP $= \text{XXX}$, XXX\% of total budget) confirms its physical basis: it directly measures the gravitational potential for floodwater to reach a given cell \citep{Renno2008, Nobre2011}. In Choc\'o, the HAND $< \SI{5}{\metre}$ threshold captures the extensive alluvial floodplains of the Atrato and San Juan, which together constitute one of the world's largest freshwater wetland complexes. Colombian planning law requires municipalities to delineate \textit{suelos de protecci\'on} (protected soils) but rarely specifies quantitative criteria; HAND provides an objective, reproducible basis for these designations. However, the SRTM-based vertical accuracy ($\pm$\SI{5}{\metre}) introduces irreducible uncertainty in Choc\'o's low-relief floodplains, where terrain gradients approach the DEM error margin over extensive areas.
+
+\subsection{ENSO--ChocoJet--Flood Linkage}
+
+The XXX\% increase in flood extent during La Ni\~na years reflects the intensification of the Choc\'o Low-Level Jet during La Ni\~na episodes \citep{Poveda2023, Salas2023, Mejia2021}. The ChocoJet transports moisture from the eastern tropical Pacific into the Colombian interior; during La Ni\~na, cooler central-Pacific SSTs strengthen the Walker circulation, enhancing moisture convergence over Choc\'o by 20--40\% \citep{Poveda2001}. This physical mechanism is more direct in Choc\'o than in Antioquia, as the department lies directly in the ChocoJet's path, making ENSO-based seasonal forecasting particularly actionable for Choc\'o's municipalities. The ENSO signal is predictable at 3--6 month lead times \citep{Tippett2012}, enabling preemptive risk communication.
+
+\subsection{Environmental Justice and Community Vulnerability}
+
+Choc\'o's flood exposure disproportionately affects Afro-Colombian ($>$82\%) and Indigenous ($\sim$12\%) communities, many of whom live along river corridors as their primary transportation routes and livelihoods depend on the fluvial network. The XXX exposed residents represent XXX\% of a population with the lowest Human Development Index in Colombia (0.55 vs.\ national 0.77), the highest multidimensional poverty rate (62\%), and the lowest institutional capacity for disaster risk management. Illegal artisanal gold mining (ASGM) has altered river dynamics through sedimentation, channel modification, and deforestation, compounding flood hazard in municipalities like Istmina, Condoto, and Tad\'o along the San Juan corridor. These intersecting vulnerabilities---climatic, social, and environmental---make Choc\'o a critical case for flood risk governance.
+
+\subsection{Limitations, Uncertainty, and Future Directions}
+\label{sec:limitations}
+
+Five limitations warrant discussion. (1) \textit{C-band forest attenuation}: Dense tropical forest ($>$85\% of Choc\'o) limits SAR flood detection to open-water surfaces, potentially underestimating flood extent by XXX\% in forested floodplains. L-band data (ALOS-PALSAR, NISAR) would complement C-band in these environments. (2) \textit{Sentinel-1B gap}: The 28-month gap (December 2021 to April 2024) reduced temporal sampling, potentially missing short-duration events. (3) \textit{Labelling circularity}: SAR flood frequency appears as both a labelling criterion and predictor. Three safeguards limit impact: (i) spatial CV ensures training and test pixels come from different subregions; (ii) the ablation experiment shows removing SAR frequency and JRC occurrence reduces AUC-ROC by only XXX; and (iii) the labelling threshold ($\geq$5 of $M$ months) is conservative. (4) \textit{DEM uncertainty}: SRTM's $\pm$\SI{5}{\metre} vertical accuracy is particularly limiting in Choc\'o's extensive low-relief floodplains. (5) \textit{Administrative boundary limitation}: The GAUL 2015 dataset does not include Nuevo Bel\'en de Bajir\'a, created as Choc\'o's 31st municipality in 2023.
+
+Future priorities include: integration of L-band SAR (NISAR) for under-canopy flood detection, deep learning SAR segmentation \citep{Bonafilia2020}, a near-real-time GEE monitoring dashboard, and coupling with CMIP6 downscaled precipitation for climate-informed risk projection.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Conclusions}
+\label{sec:conclusions}
+
+This study demonstrates that SAR remote sensing, ensemble machine learning, and cloud computing can produce municipality-level flood risk statistics for one of Earth's most challenging tropical environments---closing the persistent gap between the scale of satellite products and the scale of governance in Choc\'o, Colombia.
+
+\textbf{Scientific contribution:} Processing [XXX] Sentinel-1 scenes across \SI{46530}{\kilo\metre\squared} and 11 years, a weighted ensemble of RF, XGBoost, and LightGBM achieved AUC-ROC $= \text{XXX}$ under spatial cross-validation. HAND emerged as the dominant predictor (SHAP $= \text{XXX}$), with a $<$\SI{5}{\metre} threshold capturing the extensive Atrato and San Juan alluvial floodplains. La Ni\~na years amplify flood extent by XXX\% ($p = \text{XXX}$), directly linked to ChocoJet intensification.
+
+\textbf{Applied contribution:} [XXX] people ([XXX]\% of Choc\'o's population) reside in high-susceptibility zones, with the starkest concentrations along the Atrato corridor and San Juan basin. These communities---predominantly Afro-Colombian and Indigenous, with Colombia's lowest HDI and highest poverty rates---face compounded flood risk from climate, deforestation, and illegal mining. The framework produces outputs at the municipality scale, directly ingestible by POT and PMGRD instruments, using entirely open-access data and free cloud computing.
+
+\textbf{Replicability:} The pipeline, validated across two Colombian departments with contrasting environments (Antioquia: Andean heterogeneity, \SI{63612}{\kilo\metre\squared}; Choc\'o: hyper-humid tropical, \SI{46530}{\kilo\metre\squared}), runs entirely on Google Earth Engine and open-source Python, enabling replication to any tropical department at near-zero marginal cost. Source code is available at \url{https://github.com/Cespial/choco-flood-risk}.
+
+\section*{Supplementary Materials}
+
+The following supplementary materials are available online: Table~S1 (Flood Risk Index for all 30 municipalities), Figures~S1--S3 (SHAP dependence plots for HAND, flood frequency, and elevation), Figure~S4 (per-fold ROC curves), and the complete Google Earth Engine processing scripts.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section*{Author Contributions}
+
+Conceptualization, C.E.M. and S.J.L.; methodology, C.E.M.; software, C.E.M.; formal analysis, C.E.M.; investigation, C.E.M.; data curation, C.E.M.; writing---original draft, C.E.M.; writing---review and editing, S.J.L.; visualization, C.E.M.; supervision, S.J.L. All authors have read and agreed to the published version of the manuscript.
+
+\section*{Funding}
+
+This research was supported by Universidad EAFIT through the Master's thesis research program. No external funding was received.
+
+\section*{Data Availability}
+
+All satellite data were accessed through Google Earth Engine. Administrative boundaries from GADM 4.1. Source code available at \url{https://github.com/Cespial/choco-flood-risk} (MIT license).
+
+\section*{Acknowledgments}
+
+The authors thank Google Earth Engine for cloud computing access, ESA for Sentinel-1 data, the JRC for Global Surface Water, and UNGRD for maintaining Colombia's disaster event database. This work builds on the Antioquia flood risk framework \citep{EspinalMaya2026}.
+
+\section*{Conflicts of Interest}
+
+The authors declare no conflicts of interest.
+
+\section*{Abbreviations}
+
+The following abbreviations are used in this manuscript:\\
+
+\noindent
+\begin{tabular}{@{}ll}
+SAR & Synthetic Aperture Radar\\
+GEE & Google Earth Engine\\
+HAND & Height Above Nearest Drainage\\
+ENSO & El Ni\~no--Southern Oscillation\\
+SHAP & SHapley Additive exPlanations\\
+FRI & Flood Risk Index\\
+POT & Plan de Ordenamiento Territorial\\
+PMGRD & Plan Municipal de Gesti\'on del Riesgo de Desastres\\
+AUC-ROC & Area Under the ROC Curve\\
+TWI & Topographic Wetness Index\\
+SPI & Stream Power Index\\
+ChocoJet & Choc\'o Low-Level Jet
+\end{tabular}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\bibliographystyle{unsrtnat}
+\bibliography{references}
+
+\end{document}

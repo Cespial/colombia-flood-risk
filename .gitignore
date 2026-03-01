@@ -1,0 +1,26 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+data/
+logs/
+outputs/
+*.tif
+*.tiff
+.DS_Store
+
+# LaTeX build artifacts
+**/*.aux
+**/*.bbl
+**/*.blg
+**/*.log
+**/*.out
+**/*.synctex.gz
+**/*.fls
+**/*.fdb_latexmk
+
+# Keep figure PDFs
+!**/figures/*.pdf
+
+# Large PNGs
+**/figures/*.png

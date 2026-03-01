@@ -1,0 +1,61 @@
+{
+  "project": "Satellite-Based Flood Risk Assessment – Antioquia, Colombia",
+  "study_area": {
+    "department": "Antioquia",
+    "country": "Colombia",
+    "boundary_source": "FAO GAUL Level 1 via Google Earth Engine",
+    "gee_asset": "FAO/GAUL/2015/level1"
+  },
+  "analysis_period": {
+    "start": "2015-01-01",
+    "end": "2025-12-31"
+  },
+  "execution": {
+    "pipeline_start_utc": "2026-02-27T04:57:55.428654+00:00",
+    "pipeline_end_utc": "2026-02-27T04:58:17.618326+00:00",
+    "total_runtime_s": 22.19,
+    "total_runtime_human": "22.2s",
+    "git_commit": "unknown",
+    "python_version": "3.11.14 (main, Oct 21 2025, 18:27:30) [Clang 20.1.8 ]",
+    "run_timestamp": "2026-02-27T04:57:55.428654+00:00"
+  },
+  "cli_flags": {
+    "phases": "7,8",
+    "skip_gee": false,
+    "export_only": false,
+    "verbose": false
+  },
+  "aggregate": {
+    "phases_total": 2,
+    "phases_success": 2,
+    "phases_failed": 0,
+    "phases_skipped": 0,
+    "overall_status": "success"
+  },
+  "phases": [
+    {
+      "phase": 7,
+      "label": "Visualization",
+      "script": "07_visualization.py",
+      "status": "success",
+      "start_utc": "2026-02-27T04:57:58.569727+00:00",
+      "end_utc": "2026-02-27T04:58:14.523914+00:00",
+      "runtime_s": 15.954,
+      "metrics": {},
+      "warnings": [],
+      "error": null
+    },
+    {
+      "phase": 8,
+      "label": "Quality Control",
+      "script": "09_quality_control.py",
+      "status": "success",
+      "start_utc": "2026-02-27T04:58:14.524603+00:00",
+      "end_utc": "2026-02-27T04:58:17.617964+00:00",
+      "runtime_s": 3.093,
+      "metrics": {},
+      "warnings": [],
+      "error": null
+    }
+  ]
+}
