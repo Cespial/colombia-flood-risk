@@ -19,12 +19,12 @@ A reproducible, open-access framework that delivers municipality-level flood ris
 | Department | Municipalities | Study Area | Ensemble AUC-ROC | Subdirectory |
 |---|---|---|---|---|
 | Antioquia | 125 | 63,612 km² | 0.94 ± 0.02 | [`departments/antioquia`](departments/antioquia) |
-| Bolivar | — | — | — | [`departments/bolivar`](departments/bolivar) |
-| Cauca | — | — | — | [`departments/cauca`](departments/cauca) |
-| Choco | — | — | — | [`departments/choco`](departments/choco) |
-| Guajira | — | — | — | [`departments/guajira`](departments/guajira) |
-| Magdalena | — | — | — | [`departments/magdalena`](departments/magdalena) |
-| Narino | — | — | — | [`departments/narino`](departments/narino) |
+| Bolívar | 46 | 25,978 km² | — | [`departments/bolivar`](departments/bolivar) |
+| Cauca | 42 | 29,308 km² | — | [`departments/cauca`](departments/cauca) |
+| Chocó | 30 | 46,530 km² | — | [`departments/choco`](departments/choco) |
+| Guajira | 15 | 20,848 km² | — | [`departments/guajira`](departments/guajira) |
+| Magdalena | 30 | 23,188 km² | — | [`departments/magdalena`](departments/magdalena) |
+| Nariño | 64 | 33,268 km² | — | [`departments/narino`](departments/narino) |
 
 > Guajira includes a specialized **Sand Exclusion Layer** for arid/semi-arid terrain adaptation.
 
