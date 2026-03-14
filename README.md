@@ -25,6 +25,7 @@ A reproducible, open-access framework that delivers municipality-level flood ris
 | Guajira | 15 | 20,848 km² | — | [`departments/guajira`](departments/guajira) |
 | Magdalena | 30 | 23,188 km² | — | [`departments/magdalena`](departments/magdalena) |
 | Nariño | 64 | 33,268 km² | — | [`departments/narino`](departments/narino) |
+| **Total** | **352** | **242,732 km²** | | |
 
 > Guajira includes a specialized **Sand Exclusion Layer** for arid/semi-arid terrain adaptation.
 
